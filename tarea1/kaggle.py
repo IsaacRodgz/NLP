@@ -1,5 +1,7 @@
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.decomposition import PCA
+from sklearn.decomposition import SparsePCA
+from sklearn.feature_selection import VarianceThreshold
 from nltk.corpus.reader import CategorizedPlaintextCorpusReader
 from sklearn.preprocessing import LabelEncoder
 from sklearn.metrics import accuracy_score, confusion_matrix, f1_score, precision_recall_fscore_support, roc_auc_score
@@ -148,7 +150,7 @@ def bow5(tr_txt, V, dict_indices):
 
     return BOW
 
-
+"""
 # Recurso de emociones CANADA
 emotions_dict = pd.read_csv("emolex.csv")
 emotions_dict = emotions_dict.set_index('Spanish (es)')
@@ -156,6 +158,7 @@ emotions_dict = emotions_dict.set_index('Spanish (es)')
 # Recurso de emociones SEL
 sel_emotions_dict = pd.read_csv("SEL_full.txt", sep='\t', encoding = "ISO-8859-1")
 sel_emotions_dict = sel_emotions_dict.set_index('Palabra')
+"""
 
 # Lee corpus de tweets
 reader = CategorizedPlaintextCorpusReader('./', r'mex.*\.txt', cat_pattern=r'(\w+)/*')
@@ -170,6 +173,7 @@ labels_val = list(map(int, labels_val))
 
 tweets_test = reader.raw('mex_test.txt').split('\n')[:-1]
 
+"""
 corpus_palabras = []
 for doc in tweets_train:
     corpus_palabras += doc.split()
@@ -183,12 +187,25 @@ cont = 0
 for weight, word in V:
     dict_indices[word] = cont
     cont += 1
+"""
+
+pca = SparsePCA(n_components=10000)
+vectorizer = TfidfVectorizer(analyzer = 'char', ngram_range = (3, 5), min_df = 10, max_df = 2000)
+X_train = vectorizer.fit_transform(tweets_train)
+X_val = vectorizer.transform(tweets_val)
+X_test = vectorizer.transform(tweets_test)
+print("Dims: ", X_train.shape)
+X_train = pca.fit_transform(X_train.toarray())
+X_val = pca.transform(X_val)
+X_test = pca.transform(X_test)
+print("Dims reduced: ", X_train.shape)
 
 parameters = {'C': [.05, .12, .25, .5, 1, 2, 4]}
 
 svr = svm.LinearSVC(class_weight='balanced')
 grid = GridSearchCV(estimator=svr, param_grid=parameters, n_jobs=8, scoring="f1_macro", cv=5)
 
+"""
 BOW_train_trad=bow2(tweets_train, V, dict_indices)
 BOW_val_trad=bow2(tweets_val, V, dict_indices)
 
@@ -201,20 +218,23 @@ BOW_val_emo_sel=emo_vect_sel_tfidf_norm(tweets_val, sel_emotions_dict)
 BOW_train = np.concatenate((BOW_train_trad, BOW_train_emo, BOW_train_emo_sel), axis=1)
 BOW_val = np.concatenate((BOW_val_trad, BOW_val_emo, BOW_val_emo_sel), axis=1)
 
-grid.fit(BOW_train, labels_train)
-
-labels_pred = grid.predict(BOW_val)
-
-p, r, f, _ = precision_recall_fscore_support(labels_val, labels_pred, average='macro', pos_label=None)
-
-print(confusion_matrix(labels_val, labels_pred))
-print(metrics.classification_report(labels_val, labels_pred))
-
 BOW_test_trad=bow5(tweets_test, V, dict_indices)
 BOW_test_emo=emo_vect_tfidf_norm(tweets_test, emotions_dict)
 BOW_test_emo_sel=emo_vect_sel_tfidf_norm(tweets_test, sel_emotions_dict)
 BOW_test=np.concatenate((BOW_test_trad, BOW_test_emo, BOW_test_emo_sel), axis=1)
+"""
 
-pred_test = grid.predict(BOW_test)
+#grid.fit(BOW_train, labels_train)
+grid.fit(X_train, labels_train)
+
+#labels_pred = grid.predict(BOW_val)
+labels_pred = grid.predict(X_val)
+
+p, r, f, _ = precision_recall_fscore_support(labels_val, labels_pred, average='macro', pos_label=None)
+
+print(metrics.classification_report(labels_val, labels_pred))
+
+#pred_test = grid.predict(BOW_test)
+pred_test = grid.predict(X_test)
 result = pd.DataFrame(data=pred_test, index=np.array(range(len(pred_test))), columns=["Expected"])
 result.to_csv("result.csv", index=True)
