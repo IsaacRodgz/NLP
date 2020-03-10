@@ -1,4 +1,5 @@
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
+from scipy.sparse.linalg import svds, eigs
 from sklearn.decomposition import PCA
 from sklearn.decomposition import SparsePCA
 from sklearn.feature_selection import VarianceThreshold
@@ -9,6 +10,14 @@ from sklearn import metrics, preprocessing
 
 from sklearn import svm, datasets
 from sklearn.linear_model import LogisticRegression
+from sklearn.svm import SVC
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.gaussian_process import GaussianProcessClassifier
+from sklearn.gaussian_process.kernels import RBF
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 from sklearn.model_selection import GridSearchCV
 import numpy as np
 import pandas as pd
@@ -117,6 +126,26 @@ def bow2(tr_txt, V, dict_indices):
 
     return BOW
 
+def bow3(tr_txt, V, dict_indices):
+    BOW = np.zeros((len(tr_txt),len(V)), dtype=np.float64)
+    cont_doc = 0
+    for tr in tr_txt:
+        fdist_doc = nltk.FreqDist(tr.split())
+        for word in fdist_doc:
+            if word in dict_indices:
+                BOW[cont_doc, dict_indices[word]] = fdist_doc[word]
+        cont_doc += 1
+
+    for i in range(BOW.shape[0]):
+        norm = np.linalg.norm(BOW[i])
+
+        if norm == 0:
+            norm = 1
+
+        BOW[i] = BOW[i]/norm
+
+    return BOW
+
 def bow5(tr_txt, V, dict_indices):
 
     BOW = np.zeros((len(tr_txt),len(V)), dtype=np.float64)
@@ -189,21 +218,37 @@ for weight, word in V:
     cont += 1
 """
 
-pca = SparsePCA(n_components=10000)
-vectorizer = TfidfVectorizer(analyzer = 'char', ngram_range = (3, 5), min_df = 10, max_df = 2000)
+vectorizer = TfidfVectorizer(analyzer = 'char', ngram_range = (4, 7), min_df = 10, max_df = 1000)
 X_train = vectorizer.fit_transform(tweets_train)
 X_val = vectorizer.transform(tweets_val)
 X_test = vectorizer.transform(tweets_test)
-print("Dims: ", X_train.shape)
+print("Data dims: ", X_train.shape)
+
+"""
+U, D, V = svds(X_train, k=5000, which='LM')
+print("V dims: ", V.shape)
+Vr = V.T
+X_train = X_train@Vr
+X_train = X_val@Vr
+X_train = X_test@Vr
+"""
+
+"""
+pca = SparsePCA(n_components=10000)
 X_train = pca.fit_transform(X_train.toarray())
 X_val = pca.transform(X_val)
 X_test = pca.transform(X_test)
-print("Dims reduced: ", X_train.shape)
+"""
 
-parameters = {'C': [.05, .12, .25, .5, 1, 2, 4]}
+#print("Dims reduced: ", X_train.shape)
 
-svr = svm.LinearSVC(class_weight='balanced')
-grid = GridSearchCV(estimator=svr, param_grid=parameters, n_jobs=8, scoring="f1_macro", cv=5)
+parameters = {'C': [2, 2.5, 3, 3.5, 4], 'gamma': [.05, .12, .25, .5, 2]}
+
+#svr = svm.LinearSVC(class_weight='balanced')
+#svr = SVC()
+svr = RandomForestClassifier(max_depth=5, n_estimators=10, max_features=1)
+
+grid = GridSearchCV(estimator=svr, param_grid=parameters, n_jobs=8, scoring="f1_macro", cv=5, verbose=3)
 
 """
 BOW_train_trad=bow2(tweets_train, V, dict_indices)
