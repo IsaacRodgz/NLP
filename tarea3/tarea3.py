@@ -2,6 +2,7 @@ from sklearn.feature_extraction.text import CountVectorizer
 from nltk.tokenize import TweetTokenizer
 from nltk.corpus import stopwords
 from nltk import FreqDist
+from nltk import bigrams
 import preprocessor as p
 
 with open('mex_train.txt', 'r') as f:
@@ -30,13 +31,32 @@ def process_sentence(sent):
     return " ".join(s)
 
 tk = TweetTokenizer()
-"""
+
 tokens = [process_word(w) for sent in corpus for w in tk.tokenize(sent)]
 tokens = list(filter(None, tokens))
 dist = FreqDist(tokens)
-"""
 
+"""
 sentences = [process_sentence(sent) for sent in corpus for w in tk.tokenize(sent)]
 vectorizer = CountVectorizer()
 X = vectorizer.fit_transform(sentences)
 print(vectorizer.get_feature_names()[:50])
+"""
+
+# Unigrams
+
+total_words = len(tokens)
+
+unigrams = {}
+
+for w in dist.keys():
+    unigrams[w] = float(tokens.count(w))/total_words
+
+common = [(k,v) for k, v in sorted(unigrams.items(), key=lambda item: item[1], reverse=True)]
+#print(common[:20])
+
+# Bigrams
+
+sentences = [process_sentence(sent) for sent in corpus for w in tk.tokenize(sent)]
+bigrams_w = list(bigrams(sentences))
+print(bigrams_w[:10])
